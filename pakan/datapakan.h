@@ -1,3 +1,4 @@
+int maxDays=91;
 const int data1[91] = {
   0,//Set Zero
   /*DAY-1*/   53,   53,   53,   107,  107,  107,  160,  160,  160,  160,
