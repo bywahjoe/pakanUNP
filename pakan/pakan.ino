@@ -7,34 +7,66 @@
 #include "pinku.h"
 #include "datapakan.h"
 #include "RTClib.h"
+#include <NewPing.h>
+#include <Servo.h>
+#include "HX711.h"
 
 #define isYES digitalRead(buttonYES)
 #define isNO digitalRead(buttonNO)
 #define getPot analogRead(potensio)
+#define isMaxKanan digitalRead(maxKanan)
+#define isMaxKiri digitalRead(maxKiri)
 
-#define buzzON digitalWrite(buzz,HIGH)
-#define buzzOFF digitalWrite(buzz,LOW)
-
+NewPing sonar(trig, echo, 200);
 LiquidCrystal_I2C lcd(0x27, 20, 4);
 RTC_DS3231 rtc;
+Servo myservo;
+HX711 scale;
 
-//Address 0,1
+//Address EEPROM 10,20
+const int addHari = 10;
+const int addMode = 20;
 int hari, mode;
 int maxPakan[91];
+float valCalib=22.90;
 
 String waktu = "18:30:67";
 String pagi = "07:00";
 String sore = "17:00";
 int nowConfig[3];
 
+int ultra = 0;
 bool isRepeat = false;
+bool togKanan= false;
+bool togKiri=false;
+
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
   pinMode(buttonYES, INPUT_PULLUP);
   pinMode(buttonNO, INPUT_PULLUP);
+  pinMode(maxKanan, INPUT_PULLUP);
+  pinMode(maxKiri, INPUT_PULLUP);
+  
   pinMode(buzz, OUTPUT);
-
+  pinMode(panelA, OUTPUT);
+  pinMode(panelB, OUTPUT);
+  pinMode(relayMotor, OUTPUT);
+//  pelontarON();
+  
+  scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
+  scale.set_scale();
+  scale.tare();
+  
+//  while(1){
+//  buka();
+//  delay(5000);
+//  tutup();
+//    delay(5000);
+//    }
+  myservo.attach(servopin);
+  myservo.write(90);
+  
   lcd.init();
   lcd.clear();
   lcd.backlight();
@@ -55,12 +87,28 @@ void setup() {
 }
 
 void loop() {
+//  while(1){
+//    Serial.print(!isMaxKiri);
+//    Serial.println(!isMaxKanan);  
+//  }
+  int jam;
   char format[] = "hh:mm:ss";
+
   DateTime now = rtc.now();
   nowConfig[0] = now.year();
   nowConfig[1] = now.month();
   nowConfig[2] = now.day();
   waktu = now.toString(format);
+  jam = now.hour();
+
+  //Check Ultra < 26 habis
+  ultra = getUltra();
+  if (ultra > kosong)buzzON();
+  else buzzOFF();
+
+  //Panel Rotation
+  if (jam <= 13)panelKanan();
+  else panelKiri();
 
   //Go Menu
   if (!isYES) menu();
@@ -76,9 +124,10 @@ void loop() {
       if (waktu.startsWith(sore)) {
         hari++;
         if (hari > 90)hari = 1;
-        EEPROM.put(0, hari);
+        EEPROM.put(addHari, hari);
       }
       runAction();
+      isRepeat = true;
     }
   } else {
     isRepeat = false;
@@ -92,14 +141,87 @@ int getBibit() {
   if (mode == 2)bibit = 3000;
   return bibit;
 }
-int getBerat() {
-  return 10000;
+int getPersen(int val) {
+  int myval= constrain(val, 1, 26);
+  int persen=map(myval, 1, 26, 1, 100);
+  return 100-persen;
+}
+int getBerat(){
+  scale.set_scale(valCalib);
+  int scl=scale.get_units(10);
+
+  Serial.print("BERAT: ");Serial.println(scl);
+  return scl;
 }
 int getUltra() {
-  return 150;
+  return sonar.ping_cm();
+}
+void buzzON() {
+  digitalWrite(buzz, HIGH);
+}
+void buzzOFF() {
+  digitalWrite(buzz, LOW);
+}
+void buka() {
+  myservo.write(180);
+}
+void tutup() {
+  myservo.write(90);
+}
+void pelontarON() {
+  digitalWrite(relayMotor, HIGH);
+}
+void pelontarOFF() {
+  digitalWrite(relayMotor, LOW);
+}
+void panelOFF() {
+  digitalWrite(panelA, LOW);
+  digitalWrite(panelB, LOW);
+}
+void panelKanan() {
+  if (!isMaxKanan) {
+    panelOFF();
+    togKanan=true;
+    togKiri=false;
+  } 
+  if(!togKanan){
+    digitalWrite(panelA, HIGH);
+    digitalWrite(panelB, LOW);
+  }
+}
+void panelKiri() {
+  if (!isMaxKiri) {
+    panelOFF();
+    togKanan=false;
+    togKiri=true;
+  }
+  if(!togKiri){
+    digitalWrite(panelA, LOW);
+    digitalWrite(panelB, HIGH);
+  }
 }
 void runAction() {
+  int nowGram=getBerat();
+  int targetGram=nowGram-maxPakan[hari];
+  
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("SYSTEM IS RUNNING!");
+  lcd.setCursor(0,1);
+  
+  lcd.print("Est. :");lcd.print(maxPakan[hari]);lcd.print(" gr");
+  
+  pelontarON();
+  buka();
+  
+  while(getBerat()>=targetGram); 
 
+  pelontarOFF();
+  tutup();
+
+  lcd.setCursor(0,2);
+  lcd.print("DONE !OK");
+  delay(3000);
 }
 void viewButton() {
   lcd.setCursor(15, 0); lcd.print("~OKAY");
@@ -194,7 +316,7 @@ void menu() {
         lcd.print(var); lcd.print("~"); lcd.print(var * 1000 + 1000);
         if (!isYES) {
           lcd.print("!OK");
-          EEPROM.put(1, var);
+          EEPROM.put(addMode, var);
           mode = var;
           rewriteArr();
           delay(2000);
@@ -218,7 +340,7 @@ void menu() {
         lcd.print(var); lcd.print("/"); lcd.print("90");
         if (!isYES) {
           lcd.print("!OK");
-          EEPROM.put(0, var);
+          EEPROM.put(addHari, var);
           hari = var;
           delay(2000);
           jalan = false; break;
@@ -238,15 +360,15 @@ void rewriteArr() {
   else copy(data2, maxPakan, maxDays);
 }
 void checkMemory() {
-  hari = EEPROM.read(0);
-  mode = EEPROM.read(1);
+  hari = EEPROM.read(addHari);
+  mode = EEPROM.read(addMode);
 
   if (hari == 255 || hari == 0) {
-    EEPROM.put(0, 1);
+    EEPROM.put(addHari, 1);
     hari = 1;
   }
   if (mode == 255 || mode == 0) {
-    EEPROM.put(1, 1);
+    EEPROM.put(addMode, 1);
     mode = 1;
   }
 
@@ -282,14 +404,7 @@ void displayLCD() {
   lcd.setCursor(12, 2); lcd.print("~"); lcd.print(maxPakan[hari]);
   lcd.setCursor(18, 2); lcd.print("gr");
 
-  lcd.setCursor(0, 3); lcd.print("Cap :"); lcd.print(getBerat()); lcd.print("gr/ ");
-  lcd.setCursor(12, 3); lcd.print("~"); lcd.print(getUltra());
+  lcd.setCursor(0, 3); lcd.print("Cap :"); lcd.print(getPersen(ultra)); lcd.print("%/ ");
+  lcd.setCursor(12, 3); lcd.print("~"); lcd.print(ultra);
   lcd.setCursor(18, 3); lcd.print("cm");
-
-}
-void buka() {
-
-
-}
-void tutup() {
 }
