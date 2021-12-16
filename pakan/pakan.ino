@@ -28,7 +28,9 @@ const int addHari = 10;
 const int addMode = 20;
 int hari, mode;
 int maxPakan[91];
-float valCalib=22.90;
+float valCalib=-18.90;
+
+int sBuka=25,sTutup=90;
 
 String waktu = "18:30:67";
 String pagi = "07:00";
@@ -41,8 +43,9 @@ bool togKanan= false;
 bool togKiri=false;
 
 void setup() {
-  // put your setup code here, to run once:
   Serial.begin(9600);
+  
+  //Init
   pinMode(buttonYES, INPUT_PULLUP);
   pinMode(buttonNO, INPUT_PULLUP);
   pinMode(maxKanan, INPUT_PULLUP);
@@ -52,21 +55,17 @@ void setup() {
   pinMode(panelA, OUTPUT);
   pinMode(panelB, OUTPUT);
   pinMode(relayMotor, OUTPUT);
-//  pelontarON();
+
+  //Servo
+  myservo.attach(servopin);
+  myservo.write(sTutup);
   
+  //Timbangan
   scale.begin(LOADCELL_DOUT_PIN, LOADCELL_SCK_PIN);
   scale.set_scale();
   scale.tare();
-  
-//  while(1){
-//  buka();
-//  delay(5000);
-//  tutup();
-//    delay(5000);
-//    }
-  myservo.attach(servopin);
-  myservo.write(90);
-  
+
+  //LCD
   lcd.init();
   lcd.clear();
   lcd.backlight();
@@ -78,19 +77,12 @@ void setup() {
     while (1) delay(10);
   }
 
-  //  EEPROM.update(0,0);
-  //  EEPROM.update(1,0);
   checkMemory();
   rewriteArr();
   loadLCD();
-
 }
 
 void loop() {
-//  while(1){
-//    Serial.print(!isMaxKiri);
-//    Serial.println(!isMaxKanan);  
-//  }
   int jam;
   char format[] = "hh:mm:ss";
 
@@ -142,14 +134,14 @@ int getBibit() {
   return bibit;
 }
 int getPersen(int val) {
-  int myval= constrain(val, 1, 26);
-  int persen=map(myval, 1, 26, 1, 100);
+  int myval= constrain(val, 1, 45);
+  int persen=map(myval, 1, 45, 1, 100);
   return 100-persen;
 }
 int getBerat(){
   scale.set_scale(valCalib);
   int scl=scale.get_units(10);
-
+  
   Serial.print("BERAT: ");Serial.println(scl);
   return scl;
 }
@@ -163,10 +155,10 @@ void buzzOFF() {
   digitalWrite(buzz, LOW);
 }
 void buka() {
-  myservo.write(180);
+  myservo.write(sBuka);
 }
 void tutup() {
-  myservo.write(90);
+  myservo.write(sTutup);
 }
 void pelontarON() {
   digitalWrite(relayMotor, HIGH);
@@ -203,6 +195,7 @@ void panelKiri() {
 void runAction() {
   int nowGram=getBerat();
   int targetGram=nowGram-maxPakan[hari];
+  Serial.print("Target Gram:");Serial.println(targetGram);
   
   lcd.clear();
   lcd.setCursor(0,0);
@@ -260,7 +253,6 @@ void menu() {
     }
     delay(50);
   }
-
 
   lcd.clear();
   viewButton();
