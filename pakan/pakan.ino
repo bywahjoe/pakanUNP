@@ -11,17 +11,18 @@
 #include <Servo.h>
 #include "HX711.h"
 
+//Macro
 #define isYES digitalRead(buttonYES)
 #define isNO digitalRead(buttonNO)
 #define getPot analogRead(potensio)
 #define isMaxKanan digitalRead(maxKanan)
 #define isMaxKiri digitalRead(maxKiri)
 
-NewPing sonar(trig, echo, 200);
-LiquidCrystal_I2C lcd(0x27, 20, 4);
-RTC_DS3231 rtc;
-Servo myservo;
-HX711 scale;
+NewPing sonar(trig, echo, 200);     //Ultrasonik
+LiquidCrystal_I2C lcd(0x27, 20, 4); //LCD
+RTC_DS3231 rtc;                     //RTC Modul
+Servo myservo;                      //Servo
+HX711 scale;                        //Sensor Berat
 
 //Address EEPROM 10,20
 const int addHari = 10;
@@ -30,8 +31,10 @@ int hari, mode;
 int maxPakan[91];
 float valCalib=-18.90;
 
-int sBuka=25,sTutup=90;
+//Set Servo
+int sBuka=25,sTutup=90; 
 
+//Timer Config
 String waktu = "18:30:67";
 String pagi = "07:00";
 String sore = "17:00";
@@ -70,13 +73,15 @@ void setup() {
   lcd.clear();
   lcd.backlight();
 
+  //RTC Check
   if (! rtc.begin()) {
     Serial.println("Couldn't find RTC");
     lcd.setCursor(0, 0);
     lcd.print("Timer Error");
     while (1) delay(10);
   }
-
+  
+  //First Start Config
   checkMemory();
   rewriteArr();
   loadLCD();
@@ -90,8 +95,8 @@ void loop() {
   nowConfig[0] = now.year();
   nowConfig[1] = now.month();
   nowConfig[2] = now.day();
-  waktu = now.toString(format);
-  jam = now.hour();
+  waktu = now.toString(format); //Timer Config All
+  jam = now.hour();             //Timer Config Rotate Panel Surya
 
   //Check Ultra < 26 habis
   ultra = getUltra();
@@ -124,7 +129,8 @@ void loop() {
   } else {
     isRepeat = false;
   }
-
+  
+  //Show Status LCD
   displayLCD();
   delay(1000);
 }
